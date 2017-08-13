@@ -1,0 +1,16 @@
+{
+	"ImportPath": ".",
+	"GoVersion": "go1.8",
+	"GodepVersion": "v79",
+	"Deps": [
+		{
+			"ImportPath": "github.com/nlopes/slack",
+			"Comment": "v0.1.0-3-gf243c76",
+			"Rev": "f243c7602fdf906248fc1f165284daa4e4d2d09e"
+		},
+		{
+			"ImportPath": "golang.org/x/net/websocket",
+			"Rev": "1f9224279e98554b6a6432d4dd998a739f8b2b7c"
+		}
+	]
+}

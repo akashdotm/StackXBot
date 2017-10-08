@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"bytes"
 	"encoding/json"
+	"encoding/base64"
 	"github.com/nlopes/slack"
 )
 
@@ -69,8 +70,15 @@ var siteNames []siteData
 var incomingReqUserChannelData []userChannelData
 var welcomeMsg = []string{"hi","hello","whats up","hey","heyo","heya","yo"}
 var	stackXKey = "KZWTIpTyVR*ptaBoN62v0A(("
-var api = slack.New("xoxb-211211713988-OI4MrOVzkcwc3xshKhZFL6os")
+var api *slack.Client
+
+//func init() {
+//    http.HandleFunc("/", handleSlack)
+//}
+
+//func handleSlack(w http.ResponseWriter, r *http.Request){	
 func main() {
+	api = slack.New(returnSlackKey())
 	logger := log.New(os.Stdout, "slack-bot: ", log.Lshortfile|log.LstdFlags)
 	slack.SetLogger(logger)
 	api.SetDebug(true)
@@ -139,6 +147,21 @@ func main() {
 			// fmt.Printf("Unexpected: %v\n", msg.Data)
 		}
 	}
+}
+
+func returnSlackKey() string{
+	data := []byte("ƌ[\xdb]v\xd7^\xf5\xdf\xdf<l=\x05\xbfyE\x1bJ@\x05\x8eqY\xa2g\xf0\x0em")
+	str := base64.StdEncoding.EncodeToString(data)
+	var bufferForAccessToken bytes.Buffer
+	bufferForAccessToken.WriteString(str[:16])
+	bufferForAccessToken.WriteString("-")
+	bufferForAccessToken.WriteString(str[16:])
+	keyAfterHyphen := bufferForAccessToken.String()
+	bufferForAccessToken.Reset()
+	bufferForAccessToken.WriteString(keyAfterHyphen[:4])
+	bufferForAccessToken.WriteString("-")
+	bufferForAccessToken.WriteString(keyAfterHyphen[4:])
+	return bufferForAccessToken.String()
 }
 
 func processText(mTitle string, mText string, siteName string,key string) string{
@@ -214,6 +237,7 @@ func processText(mTitle string, mText string, siteName string,key string) string
 		//stackResp = append(responseHeader,stackResp)
 	}
 	
+	stackResp = append(stackResp,"Do you want to lookup for something else?")
 	responseSend := strings.Join(stackResp,"\n")
 	return responseSend
 	
@@ -426,14 +450,14 @@ func spawnCommunication(currentMessageIndex int) {
 	fmt.Println(incomingMsg.Text)
 	//Welcome message 
 	if incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow == "WELCOME" && !incomingReqUserChannelData[currentMessageIndex].MarkCurrentIterationComplete {
-			fmt.Println("--------------------inside welcome ----------------------------------")
+			fmt.Println("-------------------- inside welcome ----------------------------------")
 			//if errUser != nil {
 			//	fmt.Printf("%s\n", errUser)
 			//	return
 			//}
 			for wc := range welcomeMsg{
 				if strings.HasPrefix(strings.ToLower(incomingMsg.Text),welcomeMsg[wc]) {
-					welcomeText := "Howdy! What are the queries that I can help you with today?"
+					welcomeText := "Howdy! What are the topics that I can help you with today from stack exchange?"
 					params := slack.PostMessageParameters{}
 					_, _, err := api.PostMessage(incomingMsg.Channel, welcomeText, params)
 					if err != nil {
@@ -446,22 +470,45 @@ func spawnCommunication(currentMessageIndex int) {
 				}
 			}	
 		}
+	
+	//Re-enter
+	if incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow == "REENTER" && !incomingReqUserChannelData[currentMessageIndex].MarkCurrentIterationComplete {
+			fmt.Println("-------------------- inside re-enter ----------------------------------")
+			//if errUser != nil {
+			//	fmt.Printf("%s\n", errUser)
+			//	return
+			//}
+			for wc := range welcomeMsg{
+				if strings.HasPrefix(strings.ToLower(incomingMsg.Text),welcomeMsg[wc]) {
+					welcomeText := "Welcome back! What are you looking for?"
+					params := slack.PostMessageParameters{}
+					_, _, err := api.PostMessage(incomingMsg.Channel, welcomeText, params)
+					if err != nil {
+						fmt.Printf("%s\n", err)
+						return
+					}
+					incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow = "GET_TITLE"
+					incomingReqUserChannelData[currentMessageIndex].MarkCurrentIterationComplete = true
+					break
+				}
+			}	
+		}	
 			
 	//Fetch Title
 	if incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow == "GET_TITLE" && !incomingReqUserChannelData[currentMessageIndex].MarkCurrentIterationComplete {
-		fmt.Println("--------------------inside get title ----------------------------------")
-		attachInfo := slack.Attachment{
+		fmt.Println("-------------------- inside get title ----------------------------------")
+		/*attachInfo := slack.Attachment{
 					Pretext: "Please choose the appropriate sort option by clicking on the desirable button",
 					Text: "Just click on any of the buttons, to choose a sort method for your responses",
 					CallbackID: "SortTypeButtons",
 					Fallback:"Unable to choose a method",
 					Color:"#3AA3E3",
 					Title:"Choose any sort option",
-					}
+					}*/
 		incomingReqUserChannelData[currentMessageIndex].TitleContent = incomingMsg.Text 
-		afterTitleText := "If you want any relevant tags for the query, enter here [each tag separated by space or comma]. If not, enter nothing."
+		afterTitleText := "If you want any relevant tags for the query, enter here [each tag separated by space or comma]. If not, press anything."
 		params := slack.PostMessageParameters{}
-		params.Attachments = []slack.Attachment{attachInfo}
+		params.Attachments = []slack.Attachment{}
 		_, _, err := api.PostMessage(incomingMsg.Channel, afterTitleText, params)
 		if err != nil {
 			fmt.Printf("%s\n", err)
@@ -474,14 +521,14 @@ func spawnCommunication(currentMessageIndex int) {
 		
 	//Fetch Tags
 	if incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow == "GET_TAGS" && !incomingReqUserChannelData[currentMessageIndex].MarkCurrentIterationComplete {
-			fmt.Println("--------------------inside get tags ----------------------------------")
+			fmt.Println("-------------------- inside get tags ----------------------------------")
 			if len(incomingMsg.Text)<70 && incomingMsg.Text!="" {
 				
 				incomingReqUserChannelData[currentMessageIndex].TagContent = incomingMsg.Text
 				incomingReqUserChannelData[currentMessageIndex].MarkCurrentIterationComplete = true
 				incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow = "GET_SITE"
 			}
-		afterSiteText := "Which Stack exchange you want to interact with?"
+		afterSiteText := "Which Stack exchange website you want to interact with?"
 		params := slack.PostMessageParameters{}
 		_, _, err := api.PostMessage(incomingMsg.Channel, afterSiteText, params)
 		if err != nil {
@@ -492,7 +539,7 @@ func spawnCommunication(currentMessageIndex int) {
 	
 	//Fetch site name
 	if incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow == "GET_SITE" && !incomingReqUserChannelData[currentMessageIndex].MarkCurrentIterationComplete {
-		fmt.Println("--------------------inside get site ----------------------------------")
+		fmt.Println("-------------------- inside get site ----------------------------------")
 		incomingReqUserChannelData[currentMessageIndex].SiteName = incomingMsg.Text
 		incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow = "PROCESSING"
 		incomingReqUserChannelData[currentMessageIndex].MarkCurrentIterationComplete = true
@@ -500,7 +547,7 @@ func spawnCommunication(currentMessageIndex int) {
 			
 	//Put up text for processing.
 	if incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow == "PROCESSING" {
-			fmt.Println("--------------------inside PROCESSING----------------------------------")
+			fmt.Println("-------------------- inside PROCESSING----------------------------------")
 			if strings.Contains(incomingMsg.Text,"meta") {
 				go fetchSiteNames(true)
 			}
@@ -517,9 +564,9 @@ func spawnCommunication(currentMessageIndex int) {
 			
 	//Reset the iteration.
 	if incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow == "RESET" && !incomingReqUserChannelData[currentMessageIndex].MarkCurrentIterationComplete  {
-			fmt.Println("--------------------inside reset ----------------------------------")
+			fmt.Println("-------------------- inside reset ----------------------------------")
 			if incomingMsg.Text == "yes" || incomingMsg.Text == "Yes"{
-				incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow = "WELCOME"
+				incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow = "REENTER"
 			} else {
 				incomingReqUserChannelData[currentMessageIndex].CurrentPointInFlow = "END"
 				// remove user channel data from incomingReqUserChannelData
